@@ -2,18 +2,23 @@
 
 namespace Whitecube\NovaFlexibleContent;
 
+use Illuminate\Contracts\Validation\Validator as ValidatorContract;
+use Illuminate\Support\Facades\Validator;
 use Laravel\Nova\Fields\Field;
 use Laravel\Nova\Http\Requests\NovaRequest;
 use Whitecube\NovaFlexibleContent\Http\ScopedRequest;
 use Whitecube\NovaFlexibleContent\Value\Resolver;
 use Whitecube\NovaFlexibleContent\Value\ResolverInterface;
-use Whitecube\NovaFlexibleContent\Layouts\Preset;
 use Whitecube\NovaFlexibleContent\Layouts\Layout;
 use Whitecube\NovaFlexibleContent\Layouts\LayoutInterface;
 use Whitecube\NovaFlexibleContent\Layouts\Collection as LayoutsCollection;
 
 class Flexible extends Field
 {
+    const CLASSIC_RULES = 'getRules';
+    const CREATION_RULES = 'getCreationRules';
+    const UPDATE_RULES = 'getUpdateRules';
+
     /**
      * The field's component.
      *
@@ -24,21 +29,21 @@ class Flexible extends Field
     /**
      * The available layouts collection
      *
-     * @var Whitecube\NovaFlexibleContent\Layouts\Collection
+     * @var \Whitecube\NovaFlexibleContent\Layouts\Collection
      */
     protected $layouts;
 
     /**
      * The currently defined layout groups
      *
-     * @var Illuminate\Support\Collection
+     * @var \Illuminate\Support\Collection
      */
     protected $groups;
 
     /**
      * The field's value setter & getter
      *
-     * @var Whitecube\NovaFlexibleContent\Value\ResolverInterface
+     * @var \Whitecube\NovaFlexibleContent\Value\ResolverInterface
      */
     protected $resolver;
 
@@ -71,8 +76,9 @@ class Flexible extends Field
     /**
      * Set the field's resolver
      *
-     * @param string $classname
+     * @param  string  $classname
      * @return $this
+     * @throws \Exception
      */
     public function resolver($classname)
     {
@@ -90,8 +96,9 @@ class Flexible extends Field
     /**
      * Register a new layout
      *
-     * @param array $arguments
+     * @param  array  $arguments
      * @return $this
+     * @throws \Exception
      */
     public function addLayout(...$arguments)
     {
@@ -118,6 +125,11 @@ class Flexible extends Field
         return $this;
     }
 
+    public function getLayouts(): LayoutsCollection
+    {
+        return $this->layouts;
+    }
+
     /**
      * Apply a field configuration preset
      *
@@ -136,7 +148,7 @@ class Flexible extends Field
     /**
      * Push a layout instance into the layouts collection
      *
-     * @param Whitecube\NovaFlexibleContent\Layouts\LayoutInterface $layout
+     * @param \Whitecube\NovaFlexibleContent\Layouts\LayoutInterface $layout
      * @return void
      */
     protected function registerLayout(LayoutInterface $layout)
@@ -173,6 +185,7 @@ class Flexible extends Field
      * @param  object  $model
      * @param  string  $attribute
      * @return void
+     * @throws \Exception
      */
     protected function fillAttribute(NovaRequest $request, $requestAttribute, $model, $attribute)
     {
@@ -193,6 +206,7 @@ class Flexible extends Field
      * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
      * @param  string  $requestAttribute
      * @return void
+     * @throws \Exception
      */
     protected function syncAndFillGroups(NovaRequest $request, $requestAttribute)
     {
@@ -220,8 +234,8 @@ class Flexible extends Field
     /**
      * Resolve all contained groups and their fields
      *
-     * @param  Illuminate\Support\Collection  $groups
-     * @return Illuminate\Support\Collection
+     * @param  \Illuminate\Support\Collection  $groups
+     * @return \Illuminate\Support\Collection
      */
     protected function resolveGroups($groups)
     {
@@ -235,8 +249,9 @@ class Flexible extends Field
      * on the field's current model & attribute
      *
      * @param  mixed  $resource
-     * @param  string $attribute
-     * @return Illuminate\Support\Collection
+     * @param  string  $attribute
+     * @return \Illuminate\Support\Collection
+     * @throws \Exception
      */
     protected function buildGroups($resource, $attribute)
     {
@@ -251,7 +266,7 @@ class Flexible extends Field
      * Find an existing group based on its key
      *
      * @param  string $key
-     * @return Whitecube\NovaFlexibleContent\Layouts\Layout
+     * @return \Whitecube\NovaFlexibleContent\Layouts\Layout
      */
     protected function findGroup($key)
     {
@@ -265,7 +280,7 @@ class Flexible extends Field
      *
      * @param  string $layout
      * @param  string $key
-     * @return Whitecube\NovaFlexibleContent\Layouts\Layout
+     * @return \Whitecube\NovaFlexibleContent\Layouts\Layout
      */
     protected function newGroup($layout, $key)
     {
@@ -274,5 +289,215 @@ class Flexible extends Field
         if(!$layout) return;
 
         return $layout->duplicate($key);
+    }
+
+    /**
+     * Get rules for inner fields.
+     *
+     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
+     * @param  string|null  $type
+     * @return array
+     */
+    public function getFlexibleRules(NovaRequest $request, string $type = null): array
+    {
+        $type = ! in_array($type, [
+            static::CLASSIC_RULES,
+            static::CREATION_RULES,
+            static::UPDATE_RULES
+        ])
+            ? static::CLASSIC_RULES
+            : $type;
+
+        $rules = [];
+
+        foreach ($this->layouts as $layout) {
+            /** @var \Whitecube\NovaFlexibleContent\Layouts\LayoutInterface $layout */
+            $fields = $layout->fields();
+            if (is_iterable($fields)) {
+                $rules[$layout->name()] = collect($fields)->mapWithKeys(function ($field) use ($request, $type) {
+                    $rules = data_get($field->{$type}($request), $field->attribute, []);
+
+                    if ($field instanceof Flexible) {
+                        $rules += $field->getFlexibleRules($request, $type);
+                    }
+
+                    return [$field->attribute => $rules];
+                })->toArray();
+            }
+        }
+
+        return $rules;
+    }
+
+    /**
+     * Get creation for inner fields.
+     *
+     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
+     * @return array
+     */
+    public function getFlexibleCreationRules(NovaRequest $request)
+    {
+        return $this->getFlexibleRules($request, static::CREATION_RULES);
+    }
+
+    /**
+     * Get update for inner fields.
+     *
+     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
+     * @return array
+     */
+    public function getFlexibleUpdateRules(NovaRequest $request)
+    {
+        return $this->getFlexibleRules($request, static::UPDATE_RULES);
+    }
+
+    /**
+     * Validate request for creation.
+     *
+     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
+     * @param  \Illuminate\Contracts\Validation\Validator  $validator
+     * @return void
+     */
+    public function validateForCreation(NovaRequest $request, ValidatorContract &$validator): void
+    {
+        $this->validate($request, $validator, $this->getFlexibleCreationRules($request));
+    }
+
+    /**
+     * Validate request for update.
+     *
+     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
+     * @param  \Illuminate\Contracts\Validation\Validator  $validator
+     * @return void
+     */
+    public function validateForUpdate(NovaRequest $request, ValidatorContract &$validator): void
+    {
+        $this->validate($request, $validator, $this->getFlexibleUpdateRules($request));
+    }
+
+    /**
+     * Validate request..
+     *
+     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
+     * @param  \Illuminate\Contracts\Validation\Validator  $validator
+     * @param  array|null  $rules
+     * @return void
+     */
+    public function validate(NovaRequest $request, ValidatorContract &$validator, array $rules = null): void
+    {
+        if (empty($rules)) {
+            $rules = $this->getFlexibleRules($request);
+        }
+
+        $contents = json_decode($request->input($this->attribute), true);
+
+        if (empty($contents)) {
+            return;
+        }
+
+        $this->validateData($contents, $rules, $validator);
+    }
+
+    /**
+     * Validate flexible data.
+     *
+     * @param  array  $contents
+     * @param  array  $rules
+     * @param  \Illuminate\Contracts\Validation\Validator  $validator
+     * @param  string|null  $prefix
+     * @return void
+     */
+    public function validateData(array $contents, array $rules, ValidatorContract &$validator, string $prefix = null): void
+    {
+        $layouts = $this->transformData($contents);
+
+        foreach ($layouts as $layoutName => $groups) {
+            /** @var \Whitecube\NovaFlexibleContent\Layouts\LayoutInterface $layout */
+            $layout = $this->layouts->find($layoutName);
+            if (empty($layout)) {
+                continue;
+            }
+
+            $flexibleFields = $this->getFlexibleFields($layout);
+            $flexibleFieldsNames = array_keys($flexibleFields);
+
+            foreach ($groups as $key => $inputs) {
+                $inputsRules = array_map(function ($rules) {
+                    return array_values(array_filter($rules, function ($rule) {
+                        return ! is_array($rule);
+                    }));
+                }, data_get($rules, $layoutName, []));
+
+                $inputsValidator = Validator::make($inputs, $inputsRules);
+
+                if ($inputsValidator->fails()) {
+                    foreach ($inputsValidator->errors()->toArray() as $attribute => $messages) {
+                        foreach ($messages as $message) {
+                            $validator->errors()->add("{$prefix}{$this->attribute}.{$key}__{$attribute}", $message);
+                        }
+                    }
+                }
+
+                $others = array_filter($inputs, function ($attribute) use ($flexibleFieldsNames) {
+                    return in_array($attribute, $flexibleFieldsNames);
+                }, ARRAY_FILTER_USE_KEY);
+
+                foreach ($others as $attribute => $raw) {
+                    $value = json_decode($raw, true);
+
+                    if (empty($value) || ! isset($flexibleFields[$attribute])) {
+                        continue;
+                    }
+
+                    $flexibleFields[$attribute]->validateData(
+                        $value,
+                        data_get($rules, "{$layoutName}.{$attribute}", []),
+                        $validator,
+                        "{$prefix}{$this->attribute}.{$key}__"
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * Transform json decoded raw data to a group of layouts.
+     *
+     * @param  array  $raw
+     * @return array
+     */
+    protected function transformData(array $raw): array
+    {
+        return collect($raw)->mapToGroups(function ($content) {
+            return [
+                $content['layout'] => $content,
+            ];
+        })
+            ->map(function ($layout) {
+                return collect($layout)->mapWithKeys(function ($group) {
+                    return [
+                        $group['key'] => collect($group['attributes'])
+                            ->mapWithKeys(function ($value, $attribute) use ($group) {
+                                return [str_replace("{$group['key']}__", '', $attribute) => $value];
+                            })->toArray(),
+                    ];
+                })->toArray();
+            })
+            ->toArray();
+    }
+
+    /**
+     * Get Flexible fields of a layout.
+     *
+     * @param  \Whitecube\NovaFlexibleContent\Layouts\LayoutInterface  $layout
+     * @return array
+     */
+    protected function getFlexibleFields(LayoutInterface $layout): array
+    {
+        return collect($layout->fields())->mapWithKeys(function ($field) {
+            return [$field->attribute => $field instanceof Flexible ? $field : null];
+        })
+            ->filter()
+            ->toArray();
     }
 }
