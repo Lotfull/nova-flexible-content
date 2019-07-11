@@ -40,6 +40,7 @@
                     tabindex="0"
                     class="btn btn-default btn-primary inline-flex items-center relative"
                     @click="toggleLayoutsDropdownOrAddDefault"
+                    v-if="this.limitCounter != 0"
                 >
                     <span>{{ field.button }}</span>
                 </button>
@@ -76,6 +77,7 @@ export default {
             order: [],
             groups: {},
             files: {},
+            limitCounter: this.field.limit
         };
     },
 
@@ -181,6 +183,10 @@ export default {
             this.order.push(group.key);
 
             this.isLayoutsDropdownOpen = false;
+
+            if (this.limitCounter > 0) {
+                this.limitCounter--;
+            }
         },
 
         /**
@@ -215,6 +221,10 @@ export default {
 
             this.order.splice(index, 1);
             delete this.groups[key];
+
+            if (this.limitCounter >= 0) {
+                this.limitCounter++;
+            }
         },
 
         /**
