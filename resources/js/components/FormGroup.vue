@@ -1,5 +1,5 @@
 <template>
-    <div class="relative bg-white pl-8 mb-4" :id="group.key">
+    <div class="relative bg-white pl-8 mb-4 parent-with-flex" :id="group.key" style="max-width: 50%">
         <div class="w-full">
             <div class="border-t border-r border-60 rounded-tr-lg">
                 <div class="border-b border-40 leading-normal py-2 px-8">
@@ -85,6 +85,23 @@ export default {
                 this.remove()
             }
         },
+    },
+
+    mounted() {
+        let child = [...document.getElementsByClassName('parent-with-flex')];
+        let parents = [];
+
+        child.forEach(function (el) {
+            parents.push(el.parentNode);
+        });
+
+        let uniquePatent = new Set(parents);
+
+        uniquePatent.forEach((el) => {
+            el.style.display = "flex";
+            el.style.flexWrap = "wrap";
+            el.style.justifyContent = "space-evenly";
+        })
     },
 }
 </script>
