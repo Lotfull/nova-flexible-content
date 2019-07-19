@@ -68,6 +68,9 @@ export default class Group {
      */
     renameFields() {
         for (var i = this.fields.length - 1; i >= 0; i--) {
+            if (this.fields[i].attribute.indexOf('__') > -1) {
+                this.fields[i].attribute = this.fields[i].attribute.substring(18);
+            }
             this.fields[i].attribute = this.key + '__' + this.fields[i].attribute;
         }
     }
