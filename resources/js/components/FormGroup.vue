@@ -1,5 +1,5 @@
 <template>
-    <div class="relative bg-white pl-8 mb-4 parent-with-flex" :id="group.key" style="max-width: 50%">
+    <div class="relative bg-white pl-8 mb-4 parent-with-flex" :id="group.key" :style="{ maxWidth: field.maxWidth + '%' }">
         <div class="w-full">
             <div class="border-t border-b border-r border-l border-60 rounded-b-lg">
                 <component

@@ -84,6 +84,17 @@ class Flexible extends Field
     }
 
     /**
+     * Set the maximum width of the block
+     *
+     * @param int $maxWidth
+     * @return $this
+     */
+    public function maxWidth($maxWidth = 100)
+    {
+        return $this->withMeta(['maxWidth' => $maxWidth]);
+    }
+
+    /**
      * Confirm remove
      *
      * @return $this
