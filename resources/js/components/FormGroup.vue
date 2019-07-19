@@ -1,12 +1,7 @@
 <template>
     <div class="relative bg-white pl-8 mb-4 parent-with-flex" :id="group.key" style="max-width: 50%">
         <div class="w-full">
-            <div class="border-t border-r border-60 rounded-tr-lg">
-                <div class="border-b border-40 leading-normal py-2 px-8">
-                    <p class="text-80">{{ group.title }}</p>
-                </div>
-            </div>
-            <div class="border-b border-r border-l border-60 rounded-b-lg">
+            <div class="border-t border-b border-r border-l border-60 rounded-b-lg">
                 <component
                     v-for="(item, index) in group.fields"
                     :key="index"
